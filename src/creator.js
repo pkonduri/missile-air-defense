@@ -4,6 +4,7 @@
 // ============================================
 
 import { MISSILE_TYPES, THREAT_LEVELS, DEFENSE_STATUS, THREATS, DEFENSE_SYSTEMS } from './data.js';
+import { SCENARIOS, DIFFICULTY } from './scenarios.js';
 
 const TYPE_COLORS = {
     ballistic: '#ff5252',
@@ -13,10 +14,11 @@ const TYPE_COLORS = {
 };
 
 export default class CreatorModal {
-    constructor({ onThreatAdded, onDefenseAdded, onLaunchThreat }) {
+    constructor({ onThreatAdded, onDefenseAdded, onLaunchThreat, onRunScenario }) {
         this.onThreatAdded = onThreatAdded;
         this.onDefenseAdded = onDefenseAdded;
         this.onLaunchThreat = onLaunchThreat;
+        this.onRunScenario = onRunScenario;
         this.overlay = null;
         this.init();
     }
@@ -367,6 +369,74 @@ export default class CreatorModal {
         DEFENSE_SYSTEMS.push(defense);
         this.onDefenseAdded(defense);
         this.close();
+    }
+
+    // ===== SCENARIO SELECTOR =====
+
+    openScenarioSelector() {
+        const difficultyColors = {
+            [DIFFICULTY.EASY]: 'var(--accent-green)',
+            [DIFFICULTY.MEDIUM]: 'var(--accent-orange)',
+            [DIFFICULTY.HARD]: 'var(--accent-red)',
+            [DIFFICULTY.EXTREME]: '#e040fb',
+        };
+
+        const scenarioCards = SCENARIOS.map(s => {
+            const color = difficultyColors[s.difficulty] || 'var(--text-secondary)';
+            const waveSummary = s.waves.map((w, i) =>
+                `<div class="scenario-wave-item">
+                    <span class="scenario-wave-num">W${i + 1}</span>
+                    <span class="scenario-wave-label">${w.label}</span>
+                    <span class="scenario-wave-count">${w.threats.length} threats</span>
+                </div>`
+            ).join('');
+
+            return `
+                <div class="scenario-card" data-id="${s.id}">
+                    <div class="scenario-card-header">
+                        <span class="scenario-card-name">${s.name}</span>
+                        <span class="scenario-card-difficulty" style="color:${color}; border-color:${color}">${s.difficulty.toUpperCase()}</span>
+                    </div>
+                    <p class="scenario-card-desc">${s.description}</p>
+                    <div class="scenario-card-meta">
+                        <span>${s.waves.length} WAVES</span>
+                        <span>${s.totalThreats} THREATS</span>
+                    </div>
+                    <div class="scenario-waves-list">${waveSummary}</div>
+                    <button class="btn btn-danger scenario-launch-btn" data-id="${s.id}">LAUNCH SCENARIO</button>
+                </div>
+            `;
+        }).join('');
+
+        this.overlay.innerHTML = `
+            <div class="modal modal-scenario">
+                <div class="modal-header">
+                    <span class="modal-icon">⚔</span>
+                    <h3>ATTACK SCENARIOS</h3>
+                    <button class="modal-close" id="modalClose">&times;</button>
+                </div>
+                <div class="scenario-list" id="scenarioList">
+                    ${scenarioCards}
+                </div>
+                <div class="scenario-footer">
+                    <button type="button" class="btn btn-secondary" id="modalCancel">CLOSE</button>
+                </div>
+            </div>
+        `;
+        this.overlay.classList.add('visible');
+        this.bindClose();
+
+        // Bind launch buttons
+        this.overlay.querySelectorAll('.scenario-launch-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const scenarioId = btn.dataset.id;
+                if (this.onRunScenario) {
+                    this.onRunScenario(scenarioId);
+                }
+                this.close();
+            });
+        });
     }
 
     // ===== HELPERS =====

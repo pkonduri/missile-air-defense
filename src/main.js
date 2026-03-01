@@ -19,6 +19,7 @@ const engagementsEl = $('#activeEngagements');
 const trackedCountEl = $('#trackedCount');
 const threatLevelEl = $('#threatLevel');
 const clockEl = $('#clock');
+const scenarioBarEl = $('#scenarioBar');
 
 // -- Initialize --
 const map = new WorldMap(radarCanvas);
@@ -36,7 +37,14 @@ const creator = new CreatorModal({
     onLaunchThreat: (threat) => {
         sim.spawnThreat(threat);
     },
+    onRunScenario: (scenarioId) => {
+        sim.runScenario(scenarioId);
+    },
 });
+
+// -- Scenario wave/end callbacks --
+sim.onScenarioWave = () => updateScenarioBar();
+sim.onScenarioEnd = () => updateScenarioBar();
 
 // -- Theme Toggle --
 const themeToggleEl = $('#themeToggle');
@@ -192,11 +200,36 @@ function updateTrackedCount() {
     trackedCountEl.textContent = `${count} TRACKED`;
 }
 
+function updateScenarioBar() {
+    const progress = sim.getScenarioProgress();
+    if (!progress) {
+        scenarioBarEl.classList.remove('active');
+        scenarioBarEl.innerHTML = '';
+        return;
+    }
+
+    scenarioBarEl.classList.add('active');
+
+    const waveDots = progress.scenario.waves.map((w, i) => {
+        let cls = 'scenario-bar-wave';
+        if (i < progress.waveIndex) cls += ' launched';
+        else if (i === progress.waveIndex) cls += ' current';
+        return `<div class="${cls}" title="${w.label}"></div>`;
+    }).join('');
+
+    scenarioBarEl.innerHTML = `
+        <span class="scenario-bar-name">${progress.scenario.name}</span>
+        <div class="scenario-bar-waves">${waveDots}</div>
+        <span class="scenario-bar-info">W${progress.waveIndex}/${progress.totalWaves} · ${progress.launched}/${progress.total} LAUNCHED</span>
+    `;
+}
+
 function updateUI() {
     renderDefenseSystems();
     renderEngagements();
     updateThreatLevel();
     updateTrackedCount();
+    updateScenarioBar();
 }
 
 // -- Animation Loop --
@@ -210,6 +243,7 @@ function gameLoop(timestamp) {
 $('#btnLaunchThreat').addEventListener('click', () => sim.spawnRandomThreat());
 $('#btnEngageAll').addEventListener('click', () => sim.engageAll());
 $('#btnReset').addEventListener('click', () => { sim.reset(); updateUI(); });
+$('#btnScenarios').addEventListener('click', () => creator.openScenarioSelector());
 $('#btnAddThreat').addEventListener('click', () => creator.openThreatForm());
 $('#btnAddDefense').addEventListener('click', () => creator.openDefenseForm());
 
@@ -222,6 +256,7 @@ document.addEventListener('keydown', (e) => {
         sim.spawnRandomThreat();
     }
     if (e.key === 'e') sim.engageAll();
+    if (e.key === 's') creator.openScenarioSelector();
     if (e.key === 'r') { sim.reset(); updateUI(); }
 });
 
@@ -244,4 +279,4 @@ requestAnimationFrame(gameLoop);
 addLogEntry('system', 'AEGIS Air Defense Command — Online');
 addLogEntry('system', `${DEFENSE_SYSTEMS.length} defense batteries loaded`);
 addLogEntry('system', `${THREATS.length} threat profiles cataloged`);
-addLogEntry('system', 'Press SPACE to launch threat, E to engage all, R to reset');
+addLogEntry('system', 'Press SPACE to launch threat, S for scenarios, E to engage all, R to reset');

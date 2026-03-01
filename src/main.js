@@ -38,6 +38,26 @@ const creator = new CreatorModal({
     },
 });
 
+// -- Theme Toggle --
+const themeToggleEl = $('#themeToggle');
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    themeToggleEl.textContent = theme === 'day' ? '☀️' : '🌙';
+    themeToggleEl.title = theme === 'day' ? 'Switch to night mode' : 'Switch to day mode';
+    localStorage.setItem('aegis-theme', theme);
+    // Notify canvas renderers of theme change
+    map.setTheme(theme);
+}
+
+themeToggleEl.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme');
+    applyTheme(current === 'day' ? 'night' : 'day');
+});
+
+// Restore saved theme
+applyTheme(localStorage.getItem('aegis-theme') || 'night');
+
 // -- Clock --
 function updateClock() {
     const now = new Date();

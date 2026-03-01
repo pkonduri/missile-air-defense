@@ -1,15 +1,21 @@
 // ============================================
 // AEGIS — Simulation Engine
-// Threat spawning, interception logic, engagement
+// Geo-based threat spawning, tracking, interception
 // ============================================
 
 import {
     MISSILE_TYPES,
-    THREAT_LEVELS,
     DEFENSE_STATUS,
     THREATS,
     DEFENSE_SYSTEMS,
 } from './data.js';
+
+import { LAUNCH_SITES, DEFENSE_LOCATIONS, TARGET_CITIES } from './geodata.js';
+
+// 1 sim-tick ≈ 16.7ms real time, but we compress time so missiles
+// cross a theater in ~15-30 seconds of screen time
+const SIM_TIME_SCALE = 250;
+const DEG_PER_METER = 1 / 111000;
 
 export default class Simulation {
     constructor(radar, onLog, onUpdate) {
@@ -24,7 +30,28 @@ export default class Simulation {
         this.stats = { detected: 0, intercepted: 0, missed: 0 };
     }
 
-    // -- Threat Spawning --
+    // -- Geo helpers --
+
+    _bearing(lat1, lon1, lat2, lon2) {
+        const toRad = Math.PI / 180;
+        const φ1 = lat1 * toRad;
+        const φ2 = lat2 * toRad;
+        const Δλ = (lon2 - lon1) * toRad;
+        const y = Math.sin(Δλ) * Math.cos(φ2);
+        const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+        return Math.atan2(y, x);
+    }
+
+    _haversineKm(lat1, lon1, lat2, lon2) {
+        const toRad = Math.PI / 180;
+        const dLat = (lat2 - lat1) * toRad;
+        const dLon = (lon2 - lon1) * toRad;
+        const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
+        return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    // -- Threat spawning --
 
     spawnRandomThreat() {
         const template = THREATS[Math.floor(Math.random() * THREATS.length)];
@@ -34,15 +61,15 @@ export default class Simulation {
     spawnThreat(template) {
         const id = `T${String(this.nextThreatId++).padStart(3, '0')}`;
 
-        const angle = Math.random() * Math.PI * 2;
-        const edgeDist = 0.85 + Math.random() * 0.1;
-        const x = Math.cos(angle) * edgeDist;
-        const y = Math.sin(angle) * edgeDist;
+        const site = this._pickLaunchSite(template);
+        const target = this._pickTarget(site, template);
 
-        const targetAngle = Math.atan2(-y, -x) + (Math.random() - 0.5) * 0.4;
-        const speedFactor = this.getSpeedFactor(template);
-        const vx = Math.cos(targetAngle) * speedFactor;
-        const vy = Math.sin(targetAngle) * speedFactor;
+        const bearing = this._bearing(site.lat, site.lon, target.lat, target.lon);
+        const degsPerTick = this._getDegsPerTick(template);
+
+        // Project velocity into lat/lon deltas
+        const dlat = degsPerTick * Math.cos(bearing);
+        const dlon = degsPerTick * Math.sin(bearing) / Math.cos(site.lat * Math.PI / 180);
 
         const colorMap = {
             [MISSILE_TYPES.BALLISTIC]: '#ff5252',
@@ -58,11 +85,17 @@ export default class Simulation {
             type: template.type,
             threat: template.threat,
             speed: template.speed,
-            x, y, vx, vy,
-            trail: [{ x, y }],
+            lat: site.lat,
+            lon: site.lon,
+            dlat, dlon,
+            trail: [{ lat: site.lat, lon: site.lon }],
+            targetLat: target.lat,
+            targetLon: target.lon,
+            launchSiteName: site.name,
+            targetName: target.name,
             color: colorMap[template.type] || '#ffffff',
             label: `${id} ${template.name}`,
-            info: `${template.speed}m/s ${template.type.toUpperCase()}`,
+            info: `${template.speed}m/s → ${target.name}`,
             destroyed: false,
             engaged: false,
         };
@@ -71,20 +104,41 @@ export default class Simulation {
         this.radar.addTrack(threat);
         this.stats.detected++;
 
-        this.log('detect', `TRACK ${id} — ${template.name} detected bearing ${Math.round((angle * 180 / Math.PI + 360) % 360)}°, ${template.speed}m/s`);
+        this.log('detect', `TRACK ${id} — ${template.name} launched from ${site.name} → ${target.name}, ${template.speed}m/s`);
         this.onUpdate();
 
         return threat;
     }
 
-    getSpeedFactor(template) {
-        const base = {
-            [MISSILE_TYPES.BALLISTIC]: 0.003,
-            [MISSILE_TYPES.CRUISE]: 0.0015,
-            [MISSILE_TYPES.HYPERSONIC]: 0.004,
-            [MISSILE_TYPES.DRONE]: 0.0008,
+    _getDegsPerTick(template) {
+        const dt = (1 / 60) * SIM_TIME_SCALE;
+        const metersPerTick = template.speed * dt;
+        return metersPerTick * DEG_PER_METER;
+    }
+
+    _pickLaunchSite(template) {
+        const byType = {
+            [MISSILE_TYPES.BALLISTIC]: ['iran-shahrud', 'iran-tabriz', 'nk-sohae', 'nk-sinpo', 'russia-kapyar', 'china-jiuquan'],
+            [MISSILE_TYPES.HYPERSONIC]: ['russia-plesetsk', 'russia-kapyar', 'china-jiuquan'],
+            [MISSILE_TYPES.CRUISE]: ['russia-kapyar', 'iran-shahrud', 'yemen-sanaa', 'syria-damascus'],
+            [MISSILE_TYPES.DRONE]: ['yemen-sanaa', 'iran-shahrud', 'iran-tabriz', 'syria-damascus'],
         };
-        return (base[template.type] || 0.002) + Math.random() * 0.001;
+        const allowed = byType[template.type] || LAUNCH_SITES.map(s => s.id);
+        const candidates = LAUNCH_SITES.filter(s => allowed.includes(s.id));
+        return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+
+    _pickTarget(site, template) {
+        // Prefer targets within missile range, but fall back to any
+        const inRange = TARGET_CITIES.filter(t => {
+            const dist = this._haversineKm(site.lat, site.lon, t.lat, t.lon);
+            return dist > 50 && dist <= template.maxRange;
+        });
+        const pool = inRange.length > 0 ? inRange : TARGET_CITIES.filter(t => {
+            const dist = this._haversineKm(site.lat, site.lon, t.lat, t.lon);
+            return dist > 50;
+        });
+        return pool[Math.floor(Math.random() * pool.length)];
     }
 
     // -- Engagement --
@@ -95,9 +149,18 @@ export default class Simulation {
             d.roundsRemaining > 0 &&
             d.canEngage.includes(threat.type)
         );
-
         if (available.length === 0) return null;
-        available.sort((a, b) => b.pkill - a.pkill);
+
+        // Prefer defense systems near the threat's target
+        available.sort((a, b) => {
+            const locA = DEFENSE_LOCATIONS.find(l => l.systemId === a.id);
+            const locB = DEFENSE_LOCATIONS.find(l => l.systemId === b.id);
+            if (!locA || !locB) return b.pkill - a.pkill;
+            const distA = this._haversineKm(locA.lat, locA.lon, threat.targetLat, threat.targetLon);
+            const distB = this._haversineKm(locB.lat, locB.lon, threat.targetLat, threat.targetLon);
+            // Weight proximity and pkill
+            return (distA - distB) * 0.001 + (b.pkill - a.pkill);
+        });
         return available[0];
     }
 
@@ -130,12 +193,17 @@ export default class Simulation {
             }, 2000);
         }
 
+        // Interceptor launches from defense site
+        const defLoc = DEFENSE_LOCATIONS.find(d => d.systemId === defense.id)
+            || { lat: 32.0, lon: 35.0 };
+
         const interceptor = {
             id: `I${String(this.nextEngId).padStart(3, '0')}`,
-            x: 0, y: 0,
+            lat: defLoc.lat,
+            lon: defLoc.lon,
             targetId: threat.id,
-            trail: [{ x: 0, y: 0 }],
-            speed: 0.006,
+            trail: [{ lat: defLoc.lat, lon: defLoc.lon }],
+            speed: defense.interceptSpeed,
         };
         this.radar.addInterceptor(interceptor);
 
@@ -152,7 +220,7 @@ export default class Simulation {
         };
         this.engagements.push(engagement);
 
-        this.log('engage', `${defense.name} engaging ${threat.id} ${threat.name} — Pk ${(defense.pkill * 100).toFixed(0)}%`);
+        this.log('engage', `${defense.name} (${defLoc.name}) engaging ${threat.id} ${threat.name} — Pk ${(defense.pkill * 100).toFixed(0)}%`);
         this.onUpdate();
 
         return engagement;
@@ -172,29 +240,35 @@ export default class Simulation {
     // -- Simulation Tick --
 
     tick() {
+        // Move threats
         for (const threat of this.threats) {
             if (threat.destroyed) continue;
 
-            threat.x += threat.vx;
-            threat.y += threat.vy;
-            threat.trail.push({ x: threat.x, y: threat.y });
-            if (threat.trail.length > 30) threat.trail.shift();
+            threat.lat += threat.dlat;
+            threat.lon += threat.dlon;
+            threat.trail.push({ lat: threat.lat, lon: threat.lon });
+            if (threat.trail.length > 40) threat.trail.shift();
 
-            const distToCenter = Math.sqrt(threat.x ** 2 + threat.y ** 2);
-            if (distToCenter < 0.03) {
+            // Check if threat reached target
+            const distToTarget = this._haversineKm(
+                threat.lat, threat.lon, threat.targetLat, threat.targetLon,
+            );
+            if (distToTarget < 20) {
                 threat.destroyed = true;
-                this.radar.addExplosion(threat.x, threat.y, false);
+                this.radar.addExplosion(threat.lat, threat.lon, false);
                 this.stats.missed++;
-                this.log('miss', `${threat.id} ${threat.name} — IMPACT at defended zone`);
+                this.log('miss', `${threat.id} ${threat.name} — IMPACT at ${threat.targetName}`);
                 this.onUpdate();
             }
 
-            if (distToCenter > 1.1) {
+            // Cull if out of bounds
+            if (threat.lat < -90 || threat.lat > 90 || threat.lon < -180 || threat.lon > 360) {
                 threat.destroyed = true;
                 this.radar.removeTrack(threat.id);
             }
         }
 
+        // Move interceptors
         for (const eng of this.engagements) {
             if (eng.result !== null) continue;
 
@@ -206,17 +280,16 @@ export default class Simulation {
             }
 
             const int = eng.interceptor;
-            const dx = threat.x - int.x;
-            const dy = threat.y - int.y;
-            const dist = Math.sqrt(dx ** 2 + dy ** 2);
+            const distKm = this._haversineKm(int.lat, int.lon, threat.lat, threat.lon);
 
-            eng.progress = Math.min(1, 1 - dist / 0.9);
+            eng.progress = Math.max(0, Math.min(1, 1 - distKm / 600));
 
-            if (dist < 0.03) {
+            if (distKm < 20) {
+                // Intercept attempt
                 const hit = Math.random() < eng.pkill;
                 if (hit) {
                     threat.destroyed = true;
-                    this.radar.addExplosion(threat.x, threat.y, true);
+                    this.radar.addExplosion(threat.lat, threat.lon, true);
                     this.stats.intercepted++;
                     eng.result = 'intercepted';
                     this.log('intercept', `${threat.id} ${threat.name} INTERCEPTED by ${eng.defenseName}`);
@@ -229,13 +302,17 @@ export default class Simulation {
                 this.radar.removeInterceptor(int.id);
                 this.onUpdate();
             } else {
-                int.x += (dx / dist) * int.speed;
-                int.y += (dy / dist) * int.speed;
-                int.trail.push({ x: int.x, y: int.y });
-                if (int.trail.length > 20) int.trail.shift();
+                // Pursue threat
+                const bearing = this._bearing(int.lat, int.lon, threat.lat, threat.lon);
+                const intDegsPerTick = int.speed * (1 / 60) * SIM_TIME_SCALE * DEG_PER_METER;
+                int.lat += Math.cos(bearing) * intDegsPerTick;
+                int.lon += Math.sin(bearing) * intDegsPerTick / Math.cos(int.lat * Math.PI / 180);
+                int.trail.push({ lat: int.lat, lon: int.lon });
+                if (int.trail.length > 25) int.trail.shift();
             }
         }
 
+        // Cleanup resolved engagements after display delay
         this.engagements = this.engagements.filter(e => {
             if (e.result && e.result !== 'aborted') {
                 e.removeTimer = (e.removeTimer || 0) + 1;
@@ -244,7 +321,22 @@ export default class Simulation {
             return e.result === null;
         });
 
+        // Clean destroyed threats
         this.threats = this.threats.filter(t => !t.destroyed);
+    }
+
+    // -- Check if threat is near any defense site --
+
+    isInDefenseRange(threat) {
+        for (const defense of this.defenses) {
+            if (defense.status !== DEFENSE_STATUS.READY) continue;
+            if (!defense.canEngage.includes(threat.type)) continue;
+            const defLoc = DEFENSE_LOCATIONS.find(d => d.systemId === defense.id);
+            if (!defLoc) continue;
+            const dist = this._haversineKm(threat.lat, threat.lon, defLoc.lat, defLoc.lon);
+            if (dist < defense.range * 2.5) return true;
+        }
+        return false;
     }
 
     reloadDefenses() {

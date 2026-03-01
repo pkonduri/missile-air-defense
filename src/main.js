@@ -5,7 +5,7 @@
 
 import './styles.css';
 import { THREATS, DEFENSE_SYSTEMS, DEFENSE_STATUS } from './data.js';
-import Radar from './radar.js';
+import WorldMap from './worldmap.js';
 import Simulation from './simulation.js';
 import CreatorModal from './creator.js';
 
@@ -21,8 +21,8 @@ const threatLevelEl = $('#threatLevel');
 const clockEl = $('#clock');
 
 // -- Initialize --
-const radar = new Radar(radarCanvas);
-const sim = new Simulation(radar, addLogEntry, updateUI);
+const map = new WorldMap(radarCanvas);
+const sim = new Simulation(map, addLogEntry, updateUI);
 const creator = new CreatorModal({
     onThreatAdded: () => {
         renderCatalog();
@@ -170,7 +170,7 @@ function updateUI() {
 // -- Animation Loop --
 function gameLoop(timestamp) {
     sim.tick();
-    radar.render(timestamp);
+    map.render(timestamp);
     requestAnimationFrame(gameLoop);
 }
 
@@ -183,7 +183,6 @@ $('#btnAddDefense').addEventListener('click', () => creator.openDefenseForm());
 
 // -- Keyboard shortcuts --
 document.addEventListener('keydown', (e) => {
-    // Ignore when typing in modal forms
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
 
     if (e.key === ' ' || e.key === 't') {
@@ -194,12 +193,11 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'r') { sim.reset(); updateUI(); }
 });
 
-// -- Auto-engage when threats enter inner zone --
+// -- Auto-engage when threats enter defense range --
 setInterval(() => {
     const unengaged = sim.threats.filter(t => !t.engaged && !t.destroyed);
     for (const threat of unengaged) {
-        const dist = Math.sqrt(threat.x ** 2 + threat.y ** 2);
-        if (dist < 0.65) {
+        if (sim.isInDefenseRange(threat)) {
             sim.engageThreat(threat);
         }
     }

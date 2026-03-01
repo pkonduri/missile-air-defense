@@ -1,0 +1,197 @@
+// ============================================
+// AEGIS — Data Models
+// Missile types, defense systems, specifications
+// ============================================
+
+const MISSILE_TYPES = Object.freeze({
+    BALLISTIC: 'ballistic',
+    CRUISE: 'cruise',
+    HYPERSONIC: 'hypersonic',
+    DRONE: 'drone',
+});
+
+const THREAT_LEVELS = Object.freeze({
+    LOW: 'low',
+    MEDIUM: 'medium',
+    HIGH: 'high',
+});
+
+const DEFENSE_STATUS = Object.freeze({
+    READY: 'ready',
+    ENGAGING: 'engaging',
+    RELOADING: 'reloading',
+});
+
+// -- Threat Catalog --
+const THREATS = [
+    {
+        id: 'scud-b',
+        name: 'SCUD-B',
+        type: MISSILE_TYPES.BALLISTIC,
+        threat: THREAT_LEVELS.MEDIUM,
+        speed: 1500,          // m/s
+        maxRange: 300,         // km
+        altitude: 80,          // km (apogee)
+        rcs: 1.2,              // m² radar cross section
+        description: 'Short-range tactical ballistic missile',
+    },
+    {
+        id: 'df-21',
+        name: 'DF-21D',
+        type: MISSILE_TYPES.BALLISTIC,
+        threat: THREAT_LEVELS.HIGH,
+        speed: 3000,
+        maxRange: 1800,
+        altitude: 250,
+        rcs: 0.8,
+        description: 'Anti-ship ballistic missile (carrier killer)',
+    },
+    {
+        id: 'kalibr',
+        name: 'KALIBR',
+        type: MISSILE_TYPES.CRUISE,
+        threat: THREAT_LEVELS.MEDIUM,
+        speed: 250,
+        maxRange: 2500,
+        altitude: 0.02,
+        rcs: 0.1,
+        description: 'Sea-launched cruise missile, terrain-hugging flight',
+    },
+    {
+        id: 'tomahawk',
+        name: 'TOMAHAWK',
+        type: MISSILE_TYPES.CRUISE,
+        threat: THREAT_LEVELS.MEDIUM,
+        speed: 240,
+        maxRange: 2500,
+        altitude: 0.03,
+        rcs: 0.05,
+        description: 'Long-range subsonic cruise missile',
+    },
+    {
+        id: 'kinzhal',
+        name: 'KINZHAL',
+        type: MISSILE_TYPES.HYPERSONIC,
+        threat: THREAT_LEVELS.HIGH,
+        speed: 3400,
+        maxRange: 2000,
+        altitude: 20,
+        rcs: 0.3,
+        description: 'Air-launched hypersonic aeroballistic missile',
+    },
+    {
+        id: 'zircon',
+        name: 'ZIRCON',
+        type: MISSILE_TYPES.HYPERSONIC,
+        threat: THREAT_LEVELS.HIGH,
+        speed: 2700,
+        maxRange: 1000,
+        altitude: 30,
+        rcs: 0.2,
+        description: 'Scramjet-powered hypersonic cruise missile',
+    },
+    {
+        id: 'shahed-136',
+        name: 'SHAHED-136',
+        type: MISSILE_TYPES.DRONE,
+        threat: THREAT_LEVELS.LOW,
+        speed: 46,
+        maxRange: 2500,
+        altitude: 1.0,
+        rcs: 0.01,
+        description: 'One-way attack drone / loitering munition',
+    },
+    {
+        id: 'mohajer-6',
+        name: 'MOHAJER-6',
+        type: MISSILE_TYPES.DRONE,
+        threat: THREAT_LEVELS.LOW,
+        speed: 56,
+        maxRange: 200,
+        altitude: 5.5,
+        rcs: 0.05,
+        description: 'Reconnaissance/strike UCAV platform',
+    },
+];
+
+// -- Defense Systems --
+const DEFENSE_SYSTEMS = [
+    {
+        id: 'patriot',
+        name: 'PATRIOT PAC-3',
+        type: 'Surface-to-Air',
+        range: 160,            // km
+        maxAlt: 25,            // km
+        interceptSpeed: 1700,  // m/s
+        roundsTotal: 16,
+        roundsRemaining: 16,
+        pkill: 0.85,           // probability of kill
+        canEngage: [MISSILE_TYPES.BALLISTIC, MISSILE_TYPES.CRUISE],
+        status: DEFENSE_STATUS.READY,
+    },
+    {
+        id: 'thaad',
+        name: 'THAAD',
+        type: 'Terminal High Altitude',
+        range: 200,
+        maxAlt: 150,
+        interceptSpeed: 2500,
+        roundsTotal: 48,
+        roundsRemaining: 48,
+        pkill: 0.90,
+        canEngage: [MISSILE_TYPES.BALLISTIC, MISSILE_TYPES.HYPERSONIC],
+        status: DEFENSE_STATUS.READY,
+    },
+    {
+        id: 'iron-dome',
+        name: 'IRON DOME',
+        type: 'Short Range',
+        range: 70,
+        maxAlt: 10,
+        interceptSpeed: 700,
+        roundsTotal: 20,
+        roundsRemaining: 20,
+        pkill: 0.90,
+        canEngage: [MISSILE_TYPES.CRUISE, MISSILE_TYPES.DRONE],
+        status: DEFENSE_STATUS.READY,
+    },
+    {
+        id: 's400',
+        name: 'S-400 TRIUMF',
+        type: 'Long Range SAM',
+        range: 400,
+        maxAlt: 30,
+        interceptSpeed: 2100,
+        roundsTotal: 32,
+        roundsRemaining: 32,
+        pkill: 0.82,
+        canEngage: [MISSILE_TYPES.BALLISTIC, MISSILE_TYPES.CRUISE, MISSILE_TYPES.HYPERSONIC],
+        status: DEFENSE_STATUS.READY,
+    },
+    {
+        id: 'cram',
+        name: 'C-RAM PHALANX',
+        type: 'Close-In Weapon',
+        range: 3.6,
+        maxAlt: 2,
+        interceptSpeed: 1100,
+        roundsTotal: 1550,
+        roundsRemaining: 1550,
+        pkill: 0.70,
+        canEngage: [MISSILE_TYPES.CRUISE, MISSILE_TYPES.DRONE],
+        status: DEFENSE_STATUS.READY,
+    },
+    {
+        id: 'aegis-sm3',
+        name: 'AEGIS SM-3',
+        type: 'Sea-Based BMD',
+        range: 700,
+        maxAlt: 500,
+        interceptSpeed: 3000,
+        roundsTotal: 24,
+        roundsRemaining: 24,
+        pkill: 0.88,
+        canEngage: [MISSILE_TYPES.BALLISTIC, MISSILE_TYPES.HYPERSONIC],
+        status: DEFENSE_STATUS.READY,
+    },
+];

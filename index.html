@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEGIS — Air Defense Command</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Top Bar -->
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <span class="logo">◆ AEGIS</span>
+                <span class="subtitle">AIR DEFENSE COMMAND SYSTEM</span>
+            </div>
+            <div class="top-bar-center">
+                <span class="status-indicator active"></span>
+                <span class="system-status">SYSTEM ACTIVE</span>
+                <span class="separator">|</span>
+                <span id="clock" class="clock">00:00:00 UTC</span>
+            </div>
+            <div class="top-bar-right">
+                <span class="threat-level" id="threatLevel">THREAT LEVEL: <strong>LOW</strong></span>
+            </div>
+        </header>
+
+        <!-- Main Grid -->
+        <main class="dashboard">
+            <!-- Left Panel: Defense Systems -->
+            <section class="panel defense-panel">
+                <div class="panel-header">
+                    <span class="panel-icon">⛨</span>
+                    <h2>DEFENSE SYSTEMS</h2>
+                    <span class="panel-status online">ONLINE</span>
+                </div>
+                <div class="panel-body" id="defenseSystems"></div>
+            </section>
+
+            <!-- Center: Radar / Tracking -->
+            <section class="panel radar-panel">
+                <div class="panel-header">
+                    <span class="panel-icon">◎</span>
+                    <h2>TRACKING RADAR</h2>
+                    <span class="panel-status online">ACTIVE</span>
+                </div>
+                <div class="radar-container">
+                    <canvas id="radarCanvas"></canvas>
+                    <div class="radar-overlay">
+                        <span id="trackedCount" class="tracked-count">0 TRACKED</span>
+                    </div>
+                </div>
+                <div class="radar-controls">
+                    <button class="btn" id="btnLaunchThreat">LAUNCH THREAT</button>
+                    <button class="btn btn-danger" id="btnEngageAll">ENGAGE ALL</button>
+                    <button class="btn btn-secondary" id="btnReset">RESET</button>
+                </div>
+            </section>
+
+            <!-- Right Panel: Missile Catalog -->
+            <section class="panel missile-panel">
+                <div class="panel-header">
+                    <span class="panel-icon">▲</span>
+                    <h2>THREAT CATALOG</h2>
+                    <span class="panel-status online">LOADED</span>
+                </div>
+                <div class="panel-body" id="missileCatalog"></div>
+            </section>
+
+            <!-- Bottom Panel: Event Log & Engagement Timeline -->
+            <section class="panel log-panel">
+                <div class="panel-header">
+                    <span class="panel-icon">▤</span>
+                    <h2>ENGAGEMENT LOG</h2>
+                </div>
+                <div class="log-body" id="eventLog">
+                    <div class="log-entry system">System initialized. All defense batteries nominal.</div>
+                </div>
+            </section>
+
+            <!-- Bottom Right: Active Engagements -->
+            <section class="panel engagements-panel">
+                <div class="panel-header">
+                    <span class="panel-icon">⚡</span>
+                    <h2>ACTIVE ENGAGEMENTS</h2>
+                </div>
+                <div class="panel-body" id="activeEngagements">
+                    <div class="no-engagements">NO ACTIVE ENGAGEMENTS</div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="data.js"></script>
+    <script src="radar.js"></script>
+    <script src="simulation.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

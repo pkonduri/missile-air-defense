@@ -28,7 +28,8 @@ export default class Simulation {
         this.defenses = structuredClone(DEFENSE_SYSTEMS);
         this.nextThreatId = 1;
         this.nextEngId = 1;
-        this.stats = { detected: 0, intercepted: 0, missed: 0 };
+        this.stats = { detected: 0, intercepted: 0, missed: 0, engaged: 0, roundsFired: 0 };
+        this.scenarioStartTime = null;
 
         // Scenario state
         this.activeScenario = null;
@@ -37,6 +38,11 @@ export default class Simulation {
         this.scenarioStats = null;
         this.onScenarioWave = null;
         this.onScenarioEnd = null;
+        this.onScenarioComplete = null; // Called when all threats resolved
+
+        // Speed control
+        this.speedMultiplier = 1;
+        this.paused = false;
     }
 
     // -- Geo helpers --
@@ -181,6 +187,7 @@ export default class Simulation {
         this.activeScenario = scenario;
         this.scenarioWaveIndex = 0;
         this.scenarioStats = { launched: 0, total: scenario.totalThreats };
+        this.scenarioStartTime = performance.now();
 
         this.log('system', `━━━ SCENARIO: ${scenario.name} ━━━`);
         this.log('system', scenario.description);
@@ -311,6 +318,8 @@ export default class Simulation {
 
         threat.engaged = true;
         defense.roundsRemaining--;
+        this.stats.engaged++;
+        this.stats.roundsFired++;
 
         if (defense.roundsRemaining <= 0) {
             defense.status = DEFENSE_STATUS.RELOADING;
@@ -376,6 +385,16 @@ export default class Simulation {
     // -- Simulation Tick --
 
     tick() {
+        if (this.paused) return;
+
+        const steps = this.speedMultiplier;
+
+        for (let step = 0; step < steps; step++) {
+            this._tickOnce();
+        }
+    }
+
+    _tickOnce() {
         // Move threats
         for (const threat of this.threats) {
             if (threat.destroyed) continue;
@@ -391,7 +410,9 @@ export default class Simulation {
             );
             if (distToTarget < 20) {
                 threat.destroyed = true;
+                threat.impacted = true;
                 this.radar.addExplosion(threat.lat, threat.lon, false);
+                this.radar.addCityImpact(threat.targetLat, threat.targetLon, threat.targetName);
                 this.stats.missed++;
                 this.log('miss', `${threat.id} ${threat.name} — IMPACT at ${threat.targetName}`);
                 this.onUpdate();
@@ -459,6 +480,38 @@ export default class Simulation {
 
         // Clean destroyed threats
         this.threats = this.threats.filter(t => !t.destroyed);
+
+        // Check scenario completion: all waves launched + no active threats + no active engagements
+        this._checkScenarioComplete();
+    }
+
+    _checkScenarioComplete() {
+        if (!this.activeScenario) return;
+        if (!this.scenarioStats) return;
+        if (this.scenarioStats.launched < this.scenarioStats.total) return;
+        if (this.threats.length > 0) return;
+        if (this.engagements.some(e => e.result === null)) return;
+        if (this._scenarioCompleted) return;
+
+        this._scenarioCompleted = true;
+        const elapsed = performance.now() - this.scenarioStartTime;
+        const report = {
+            scenario: this.activeScenario,
+            stats: { ...this.stats },
+            elapsed,
+            defenses: this.defenses.map(d => ({
+                name: d.name,
+                roundsFired: d.roundsTotal - d.roundsRemaining,
+                roundsTotal: d.roundsTotal,
+            })),
+        };
+
+        this.log('system', `━━━ SCENARIO COMPLETE — ${this.stats.intercepted}/${this.stats.detected} intercepted ━━━`);
+
+        if (this.onScenarioComplete) {
+            // Small delay so the last explosion can play out
+            setTimeout(() => this.onScenarioComplete(report), 1500);
+        }
     }
 
     // -- Check if threat is near any defense site --
@@ -486,7 +539,11 @@ export default class Simulation {
         this.defenses = structuredClone(DEFENSE_SYSTEMS);
         this.nextThreatId = 1;
         this.nextEngId = 1;
-        this.stats = { detected: 0, intercepted: 0, missed: 0 };
+        this.stats = { detected: 0, intercepted: 0, missed: 0, engaged: 0, roundsFired: 0 };
+        this._scenarioCompleted = false;
+        this.scenarioStartTime = null;
+        this.paused = false;
+        this.speedMultiplier = 1;
         this.radar.clearAll();
         this.log('system', 'System reset. All batteries nominal.');
         this.onUpdate();

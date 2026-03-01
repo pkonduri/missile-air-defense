@@ -21,6 +21,7 @@
             </div>
             <div class="top-bar-right">
                 <span class="threat-level" id="threatLevel">THREAT LEVEL: <strong>LOW</strong></span>
+                <button class="sound-toggle" id="soundToggle" title="Toggle sound effects">🔊</button>
                 <button class="theme-toggle" id="themeToggle" title="Toggle day/night mode">🌙</button>
             </div>
         </header>
@@ -49,6 +50,13 @@
                     <canvas id="radarCanvas"></canvas>
                     <div class="radar-overlay">
                         <span id="trackedCount" class="tracked-count">0 TRACKED</span>
+                    </div>
+                    <div class="stats-hud" id="statsHud"></div>
+                    <div class="speed-control" id="speedControl">
+                        <button class="speed-btn" data-speed="0" title="Pause (P)">⏸</button>
+                        <button class="speed-btn active" data-speed="1" title="1x Speed (1)">1×</button>
+                        <button class="speed-btn" data-speed="2" title="2x Speed (2)">2×</button>
+                        <button class="speed-btn" data-speed="4" title="4x Speed (4)">4×</button>
                     </div>
                 </div>
                 <div class="scenario-bar" id="scenarioBar"></div>

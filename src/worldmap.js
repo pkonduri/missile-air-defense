@@ -16,6 +16,8 @@ export default class WorldMap {
         this.tracks = [];
         this.interceptors = [];
         this.explosions = [];
+        this.particles = [];
+        this.cityImpacts = [];   // { lat, lon, name, startTime, intensity }
         this.sweepX = 0;
 
         // Theme (night or day)
@@ -319,26 +321,127 @@ export default class WorldMap {
 
         this.explosions = this.explosions.filter(exp => {
             const age = timestamp - exp.startTime;
-            if (age > 1200) return false;
+            if (age > 1800) return false;
 
             const { x, y } = projection.project(exp.lat, exp.lon);
-            const progress = age / 1200;
-            const r = 5 + progress * 24;
+            const progress = age / 1800;
+            const r = 5 + progress * 32;
 
-            // Outer ring
+            // Shockwave ring
+            if (age < 600) {
+                const shockR = 8 + (age / 600) * 40;
+                ctx.beginPath();
+                ctx.arc(x, y, shockR, 0, Math.PI * 2);
+                ctx.strokeStyle = exp.success
+                    ? `rgba(0, 230, 118, ${0.6 * (1 - age / 600)})`
+                    : `rgba(255, 82, 82, ${0.6 * (1 - age / 600)})`;
+                ctx.lineWidth = 2.5 * (1 - age / 600);
+                ctx.stroke();
+            }
+
+            // Outer glow
             ctx.beginPath();
             ctx.arc(x, y, r, 0, Math.PI * 2);
-            ctx.fillStyle = exp.success
-                ? `rgba(0, 230, 118, ${0.4 * (1 - progress)})`
-                : `rgba(255, 82, 82, ${0.4 * (1 - progress)})`;
+            const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+            if (exp.success) {
+                grad.addColorStop(0, `rgba(0, 230, 118, ${0.5 * (1 - progress)})`);
+                grad.addColorStop(0.5, `rgba(0, 230, 118, ${0.15 * (1 - progress)})`);
+                grad.addColorStop(1, 'rgba(0, 230, 118, 0)');
+            } else {
+                grad.addColorStop(0, `rgba(255, 82, 82, ${0.5 * (1 - progress)})`);
+                grad.addColorStop(0.5, `rgba(255, 82, 82, ${0.15 * (1 - progress)})`);
+                grad.addColorStop(1, 'rgba(255, 82, 82, 0)');
+            }
+            ctx.fillStyle = grad;
             ctx.fill();
 
-            // Flash
-            if (age < 200) {
+            // White flash
+            if (age < 150) {
+                const flashAlpha = 0.95 * (1 - age / 150);
                 ctx.beginPath();
-                ctx.arc(x, y, r * 0.4, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * (1 - age / 200)})`;
+                ctx.arc(x, y, 6 + (age / 150) * 10, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
                 ctx.fill();
+            }
+
+            // Inner core flicker
+            if (age < 800) {
+                const coreR = 3 * (1 - age / 800);
+                ctx.beginPath();
+                ctx.arc(x, y, coreR, 0, Math.PI * 2);
+                ctx.fillStyle = exp.success
+                    ? `rgba(180, 255, 220, ${0.8 * (1 - age / 800)})`
+                    : `rgba(255, 200, 150, ${0.8 * (1 - age / 800)})`;
+                ctx.fill();
+            }
+
+            return true;
+        });
+    }
+
+    drawParticles() {
+        const { ctx, projection } = this;
+
+        this.particles = this.particles.filter(p => {
+            p.lat += p.vy * 0.01;
+            p.lon += p.vx * 0.01;
+            p.life -= p.decay;
+            p.vx *= 0.97;
+            p.vy *= 0.97;
+
+            if (p.life <= 0) return false;
+
+            const { x, y } = projection.project(p.lat, p.lon);
+            ctx.beginPath();
+            ctx.arc(x, y, p.size * p.life, 0, Math.PI * 2);
+            ctx.fillStyle = p.color + Math.round(p.life * 200).toString(16).padStart(2, '0');
+            ctx.fill();
+
+            return true;
+        });
+    }
+
+    drawCityImpacts(timestamp) {
+        const { ctx, projection } = this;
+
+        this.cityImpacts = this.cityImpacts.filter(impact => {
+            const age = timestamp - impact.startTime;
+            if (age > 8000) return false;
+
+            const { x, y } = projection.project(impact.lat, impact.lon);
+            const progress = age / 8000;
+
+            // Pulsing red glow around impacted city
+            const pulseR = 8 + Math.sin(age * 0.008) * 4;
+            const alpha = 0.4 * (1 - progress);
+            ctx.beginPath();
+            ctx.arc(x, y, pulseR, 0, Math.PI * 2);
+            const grad = ctx.createRadialGradient(x, y, 0, x, y, pulseR);
+            grad.addColorStop(0, `rgba(255, 82, 82, ${alpha})`);
+            grad.addColorStop(0.6, `rgba(255, 50, 20, ${alpha * 0.5})`);
+            grad.addColorStop(1, 'rgba(255, 50, 20, 0)');
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            // Fire flicker particles
+            if (age < 5000) {
+                for (let i = 0; i < 3; i++) {
+                    const fx = x + (Math.random() - 0.5) * 10;
+                    const fy = y + (Math.random() - 0.5) * 10 - Math.random() * 5;
+                    const fr = 1 + Math.random() * 2;
+                    ctx.beginPath();
+                    ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(${200 + Math.random() * 55}, ${80 + Math.random() * 80}, 20, ${0.3 * (1 - progress)})`;
+                    ctx.fill();
+                }
+            }
+
+            // "IMPACT" label
+            if (age < 3000) {
+                ctx.font = 'bold 10px SF Mono, Consolas, monospace';
+                ctx.fillStyle = `rgba(255, 82, 82, ${0.8 * (1 - age / 3000)})`;
+                ctx.textAlign = 'center';
+                ctx.fillText('IMPACT', x, y - 14);
             }
 
             return true;
@@ -363,11 +466,13 @@ export default class WorldMap {
         this.drawGraticule();
         this.drawMap();
         this.drawSweep();
+        this.drawCityImpacts(timestamp);
         this.drawCityMarkers();
         this.drawDefenseSites();
         this.drawTracks(timestamp);
         this.drawInterceptors();
         this.drawExplosions(timestamp);
+        this.drawParticles();
     }
 
     // -- Track management (same API as before) --
@@ -393,11 +498,37 @@ export default class WorldMap {
             lat, lon, success,
             startTime: performance.now(),
         });
+
+        // Spawn particles for dramatic effect
+        const count = success ? 18 : 24;
+        for (let i = 0; i < count; i++) {
+            const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+            const speed = 0.3 + Math.random() * 1.2;
+            this.particles.push({
+                lat, lon,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 1.0,
+                decay: 0.008 + Math.random() * 0.012,
+                size: 1.5 + Math.random() * 2.5,
+                color: success ? '#00e676' : '#ff5252',
+            });
+        }
+    }
+
+    addCityImpact(lat, lon, name) {
+        this.cityImpacts.push({
+            lat, lon, name,
+            startTime: performance.now(),
+            intensity: 1.0,
+        });
     }
 
     clearAll() {
         this.tracks = [];
         this.interceptors = [];
         this.explosions = [];
+        this.particles = [];
+        this.cityImpacts = [];
     }
 }

@@ -8,6 +8,9 @@ import { THREATS, DEFENSE_SYSTEMS, DEFENSE_STATUS } from './data.js';
 import WorldMap from './worldmap.js';
 import Simulation from './simulation.js';
 import CreatorModal from './creator.js';
+import audio from './audio.js';
+import { showAAR } from './aar.js';
+import { showToast } from './toast.js';
 
 // -- DOM refs --
 const $ = (sel) => document.querySelector(sel);
@@ -20,6 +23,8 @@ const trackedCountEl = $('#trackedCount');
 const threatLevelEl = $('#threatLevel');
 const clockEl = $('#clock');
 const scenarioBarEl = $('#scenarioBar');
+const statsHudEl = $('#statsHud');
+const speedControlEl = $('#speedControl');
 
 // -- Initialize --
 const map = new WorldMap(radarCanvas);
@@ -39,12 +44,27 @@ const creator = new CreatorModal({
     },
     onRunScenario: (scenarioId) => {
         sim.runScenario(scenarioId);
+        audio.playScenarioStart();
+        showToast('system', 'Scenario launched', 4000);
     },
 });
 
 // -- Scenario wave/end callbacks --
-sim.onScenarioWave = () => updateScenarioBar();
+sim.onScenarioWave = (waveIndex, wave) => {
+    updateScenarioBar();
+    audio.playWaveIncoming();
+    showToast('wave', wave.label, 3000);
+};
 sim.onScenarioEnd = () => updateScenarioBar();
+
+// -- AAR callback: when all threats resolved after scenario --
+sim.onScenarioComplete = async (report) => {
+    const action = await showAAR(report);
+    if (action === 'retry') {
+        sim.runScenario(report.scenario.id);
+        audio.playScenarioStart();
+    }
+};
 
 // -- Theme Toggle --
 const themeToggleEl = $('#themeToggle');
@@ -54,7 +74,6 @@ function applyTheme(theme) {
     themeToggleEl.textContent = theme === 'day' ? '☀️' : '🌙';
     themeToggleEl.title = theme === 'day' ? 'Switch to night mode' : 'Switch to day mode';
     localStorage.setItem('aegis-theme', theme);
-    // Notify canvas renderers of theme change
     map.setTheme(theme);
 }
 
@@ -63,8 +82,45 @@ themeToggleEl.addEventListener('click', () => {
     applyTheme(current === 'day' ? 'night' : 'day');
 });
 
-// Restore saved theme
 applyTheme(localStorage.getItem('aegis-theme') || 'night');
+
+// -- Sound Toggle --
+const soundToggleEl = $('#soundToggle');
+
+function applySoundState(enabled) {
+    audio.enabled = enabled;
+    soundToggleEl.textContent = enabled ? '🔊' : '🔇';
+    soundToggleEl.title = enabled ? 'Mute sound effects (M)' : 'Enable sound effects (M)';
+    soundToggleEl.classList.toggle('muted', !enabled);
+    localStorage.setItem('aegis-sound', enabled ? 'on' : 'off');
+}
+
+soundToggleEl.addEventListener('click', () => {
+    applySoundState(!audio.enabled);
+});
+
+applySoundState(localStorage.getItem('aegis-sound') !== 'off');
+
+// -- Speed Control --
+speedControlEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('.speed-btn');
+    if (!btn) return;
+    const speed = parseInt(btn.dataset.speed);
+
+    if (speed === 0) {
+        sim.paused = !sim.paused;
+        btn.classList.toggle('active', sim.paused);
+        if (sim.paused) showToast('system', 'Simulation PAUSED', 2000);
+    } else {
+        sim.paused = false;
+        sim.speedMultiplier = speed;
+        speedControlEl.querySelectorAll('.speed-btn').forEach(b => {
+            const s = parseInt(b.dataset.speed);
+            if (s === 0) b.classList.remove('active');
+            else b.classList.toggle('active', s === speed);
+        });
+    }
+});
 
 // -- Clock --
 function updateClock() {
@@ -101,7 +157,6 @@ function renderDefenseSystems() {
         `;
     }).join('');
 
-    // Click to view details
     defensesEl.querySelectorAll('.defense-system-card').forEach(card => {
         card.style.cursor = 'pointer';
         card.addEventListener('click', () => {
@@ -138,7 +193,9 @@ function renderCatalog() {
     });
 }
 
-// -- Log --
+// -- Log with Audio + Toasts --
+let toastThrottle = 0;
+
 function addLogEntry(type, message) {
     const time = new Date().toUTCString().split(' ')[4];
     const entry = document.createElement('div');
@@ -149,6 +206,31 @@ function addLogEntry(type, message) {
 
     while (logEl.children.length > 100) {
         logEl.removeChild(logEl.firstChild);
+    }
+
+    // Play sound effects + toasts based on event type
+    const now = Date.now();
+    switch (type) {
+        case 'detect':
+            audio.playAlert();
+            if (now - toastThrottle > 800) {
+                showToast('detect', message, 3000);
+                toastThrottle = now;
+            }
+            break;
+        case 'engage':
+            audio.playEngage();
+            break;
+        case 'intercept':
+            audio.playIntercept();
+            showToast('intercept', message, 3000);
+            break;
+        case 'miss':
+            if (message.includes('IMPACT')) {
+                audio.playImpact();
+                showToast('critical', message, 5000);
+            }
+            break;
     }
 }
 
@@ -224,12 +306,45 @@ function updateScenarioBar() {
     `;
 }
 
+// -- Stats HUD --
+function updateStatsHud() {
+    const s = sim.stats;
+    const rate = s.detected > 0 ? Math.round((s.intercepted / s.detected) * 100) : 0;
+    const rateColor = rate >= 80 ? 'var(--accent-green)' : rate >= 50 ? 'var(--accent-orange)' : 'var(--accent-red)';
+
+    // Only show when there's activity
+    if (s.detected === 0) {
+        statsHudEl.innerHTML = '';
+        return;
+    }
+
+    statsHudEl.innerHTML = `
+        <div class="stats-hud-item">
+            <span class="stats-hud-value" style="color: var(--accent-cyan)">${s.detected}</span>
+            <span class="stats-hud-label">DETECTED</span>
+        </div>
+        <div class="stats-hud-item">
+            <span class="stats-hud-value" style="color: var(--accent-green)">${s.intercepted}</span>
+            <span class="stats-hud-label">KILLS</span>
+        </div>
+        <div class="stats-hud-item">
+            <span class="stats-hud-value" style="color: var(--accent-red)">${s.missed}</span>
+            <span class="stats-hud-label">IMPACTS</span>
+        </div>
+        <div class="stats-hud-item">
+            <span class="stats-hud-value" style="color: ${rateColor}">${rate}%</span>
+            <span class="stats-hud-label">RATE</span>
+        </div>
+    `;
+}
+
 function updateUI() {
     renderDefenseSystems();
     renderEngagements();
     updateThreatLevel();
     updateTrackedCount();
     updateScenarioBar();
+    updateStatsHud();
 }
 
 // -- Animation Loop --
@@ -240,7 +355,10 @@ function gameLoop(timestamp) {
 }
 
 // -- Button handlers --
-$('#btnLaunchThreat').addEventListener('click', () => sim.spawnRandomThreat());
+$('#btnLaunchThreat').addEventListener('click', () => {
+    sim.spawnRandomThreat();
+    audio.playLaunch();
+});
 $('#btnEngageAll').addEventListener('click', () => sim.engageAll());
 $('#btnReset').addEventListener('click', () => { sim.reset(); updateUI(); });
 $('#btnScenarios').addEventListener('click', () => creator.openScenarioSelector());
@@ -254,10 +372,31 @@ document.addEventListener('keydown', (e) => {
     if (e.key === ' ' || e.key === 't') {
         e.preventDefault();
         sim.spawnRandomThreat();
+        audio.playLaunch();
     }
     if (e.key === 'e') sim.engageAll();
     if (e.key === 's') creator.openScenarioSelector();
     if (e.key === 'r') { sim.reset(); updateUI(); }
+    if (e.key === 'p') {
+        sim.paused = !sim.paused;
+        const pauseBtn = speedControlEl.querySelector('[data-speed="0"]');
+        pauseBtn.classList.toggle('active', sim.paused);
+        if (sim.paused) showToast('system', 'PAUSED', 2000);
+    }
+    if (e.key === 'm') {
+        applySoundState(!audio.enabled);
+    }
+    // Speed shortcuts: 1-4
+    if (e.key >= '1' && e.key <= '4') {
+        const speed = parseInt(e.key);
+        sim.paused = false;
+        sim.speedMultiplier = speed;
+        speedControlEl.querySelectorAll('.speed-btn').forEach(b => {
+            const s = parseInt(b.dataset.speed);
+            if (s === 0) b.classList.remove('active');
+            else b.classList.toggle('active', s === speed);
+        });
+    }
 });
 
 // -- Auto-engage when threats enter defense range --
@@ -279,4 +418,4 @@ requestAnimationFrame(gameLoop);
 addLogEntry('system', 'AEGIS Air Defense Command — Online');
 addLogEntry('system', `${DEFENSE_SYSTEMS.length} defense batteries loaded`);
 addLogEntry('system', `${THREATS.length} threat profiles cataloged`);
-addLogEntry('system', 'Press SPACE to launch threat, S for scenarios, E to engage all, R to reset');
+addLogEntry('system', 'T=threat  S=scenarios  E=engage  R=reset  P=pause  M=mute  1-4=speed');

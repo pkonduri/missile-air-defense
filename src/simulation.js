@@ -11,6 +11,7 @@ import {
 } from './data.js';
 
 import { LAUNCH_SITES, DEFENSE_LOCATIONS, TARGET_CITIES } from './geodata.js';
+import { SCENARIOS } from './scenarios.js';
 
 // 1 sim-tick ≈ 16.7ms real time, but we compress time so missiles
 // cross a theater in ~15-30 seconds of screen time
@@ -28,6 +29,14 @@ export default class Simulation {
         this.nextThreatId = 1;
         this.nextEngId = 1;
         this.stats = { detected: 0, intercepted: 0, missed: 0 };
+
+        // Scenario state
+        this.activeScenario = null;
+        this.scenarioWaveIndex = 0;
+        this.scenarioTimers = [];
+        this.scenarioStats = null;
+        this.onScenarioWave = null;
+        this.onScenarioEnd = null;
     }
 
     // -- Geo helpers --
@@ -108,6 +117,133 @@ export default class Simulation {
         this.onUpdate();
 
         return threat;
+    }
+
+    // -- Directed threat spawn (for scenarios) --
+
+    spawnThreatDirected(threatId, launchSiteId, targetName) {
+        const template = THREATS.find(t => t.id === threatId);
+        if (!template) return null;
+
+        const site = launchSiteId
+            ? LAUNCH_SITES.find(s => s.id === launchSiteId) || this._pickLaunchSite(template)
+            : this._pickLaunchSite(template);
+
+        const target = targetName
+            ? TARGET_CITIES.find(c => c.name === targetName) || this._pickTarget(site, template)
+            : this._pickTarget(site, template);
+
+        const id = `T${String(this.nextThreatId++).padStart(3, '0')}`;
+        const bearing = this._bearing(site.lat, site.lon, target.lat, target.lon);
+        const degsPerTick = this._getDegsPerTick(template);
+        const dlat = degsPerTick * Math.cos(bearing);
+        const dlon = degsPerTick * Math.sin(bearing) / Math.cos(site.lat * Math.PI / 180);
+
+        const colorMap = {
+            [MISSILE_TYPES.BALLISTIC]: '#ff5252',
+            [MISSILE_TYPES.CRUISE]: '#ffab40',
+            [MISSILE_TYPES.HYPERSONIC]: '#e040fb',
+            [MISSILE_TYPES.DRONE]: '#00e5ff',
+        };
+
+        const threat = {
+            id, templateId: template.id,
+            name: template.name, type: template.type, threat: template.threat,
+            speed: template.speed,
+            lat: site.lat, lon: site.lon, dlat, dlon,
+            trail: [{ lat: site.lat, lon: site.lon }],
+            targetLat: target.lat, targetLon: target.lon,
+            launchSiteName: site.name, targetName: target.name,
+            color: colorMap[template.type] || '#ffffff',
+            label: `${id} ${template.name}`,
+            info: `${template.speed}m/s → ${target.name}`,
+            destroyed: false, engaged: false,
+        };
+
+        this.threats.push(threat);
+        this.radar.addTrack(threat);
+        this.stats.detected++;
+        this.log('detect', `TRACK ${id} — ${template.name} launched from ${site.name} → ${target.name}, ${template.speed}m/s`);
+        this.onUpdate();
+        return threat;
+    }
+
+    // -- Scenario Runner --
+
+    runScenario(scenarioId) {
+        const scenario = SCENARIOS.find(s => s.id === scenarioId);
+        if (!scenario) return;
+
+        // Reset before starting
+        this.stopScenario();
+        this.reset();
+
+        this.activeScenario = scenario;
+        this.scenarioWaveIndex = 0;
+        this.scenarioStats = { launched: 0, total: scenario.totalThreats };
+
+        this.log('system', `━━━ SCENARIO: ${scenario.name} ━━━`);
+        this.log('system', scenario.description);
+        this.log('system', `${scenario.waves.length} waves, ${scenario.totalThreats} total threats — Difficulty: ${scenario.difficulty.toUpperCase()}`);
+
+        // Schedule each wave
+        for (let i = 0; i < scenario.waves.length; i++) {
+            const wave = scenario.waves[i];
+            const timer = setTimeout(() => this._executeWave(i), wave.delay);
+            this.scenarioTimers.push(timer);
+        }
+
+        this.onUpdate();
+    }
+
+    _executeWave(waveIndex) {
+        if (!this.activeScenario) return;
+        const scenario = this.activeScenario;
+        const wave = scenario.waves[waveIndex];
+        if (!wave) return;
+
+        this.scenarioWaveIndex = waveIndex + 1;
+        this.log('system', `▸ ${wave.label} (${wave.threats.length} threats)`);
+
+        if (this.onScenarioWave) {
+            this.onScenarioWave(waveIndex, wave);
+        }
+
+        for (const t of wave.threats) {
+            this.spawnThreatDirected(t.threatId, t.launchSiteId, t.targetName);
+            this.scenarioStats.launched++;
+        }
+
+        // Check if this was the last wave
+        if (waveIndex >= scenario.waves.length - 1) {
+            this.log('system', `━━━ ALL WAVES LAUNCHED — ${this.scenarioStats.launched} threats in play ━━━`);
+            if (this.onScenarioEnd) {
+                this.onScenarioEnd(scenario);
+            }
+        }
+
+        this.onUpdate();
+    }
+
+    stopScenario() {
+        for (const timer of this.scenarioTimers) {
+            clearTimeout(timer);
+        }
+        this.scenarioTimers = [];
+        this.activeScenario = null;
+        this.scenarioStats = null;
+        this.scenarioWaveIndex = 0;
+    }
+
+    getScenarioProgress() {
+        if (!this.activeScenario) return null;
+        return {
+            scenario: this.activeScenario,
+            waveIndex: this.scenarioWaveIndex,
+            totalWaves: this.activeScenario.waves.length,
+            launched: this.scenarioStats?.launched || 0,
+            total: this.scenarioStats?.total || 0,
+        };
     }
 
     _getDegsPerTick(template) {
@@ -344,6 +480,7 @@ export default class Simulation {
     }
 
     reset() {
+        this.stopScenario();
         this.threats = [];
         this.engagements = [];
         this.defenses = structuredClone(DEFENSE_SYSTEMS);

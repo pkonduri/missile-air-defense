@@ -33,6 +33,9 @@ const creator = new CreatorModal({
         renderDefenseSystems();
         addLogEntry('system', 'New defense system deployed');
     },
+    onLaunchThreat: (threat) => {
+        sim.spawnThreat(threat);
+    },
 });
 
 // -- Clock --
@@ -69,6 +72,15 @@ function renderDefenseSystems() {
             </div>
         `;
     }).join('');
+
+    // Click to view details
+    defensesEl.querySelectorAll('.defense-system-card').forEach(card => {
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', () => {
+            const def = DEFENSE_SYSTEMS.find(d => d.id === card.dataset.id);
+            if (def) creator.openDefenseDetail(def);
+        });
+    });
 }
 
 // -- Render Missile Catalog --
@@ -90,11 +102,11 @@ function renderCatalog() {
     `).join('');
 
     catalogEl.querySelectorAll('.missile-card').forEach(card => {
+        card.style.cursor = 'pointer';
         card.addEventListener('click', () => {
             const template = THREATS.find(t => t.id === card.dataset.id);
-            if (template) sim.spawnThreat(template);
+            if (template) creator.openThreatDetail(template);
         });
-        card.style.cursor = 'pointer';
     });
 }
 

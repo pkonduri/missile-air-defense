@@ -770,6 +770,111 @@ body {
     padding: 10px;
 }
 
+/* ---- Detail Modal ---- */
+.modal-detail .detail-body {
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.detail-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    padding: 3px 10px;
+    border: 1px solid;
+    border-radius: 3px;
+    align-self: flex-start;
+}
+
+.detail-badge-green {
+    border-color: var(--accent-green);
+    color: var(--accent-green);
+}
+
+.detail-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.detail-section-label {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.detail-label {
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+}
+
+.detail-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.threat-val-low { color: var(--accent-green); }
+.threat-val-medium { color: var(--accent-orange); }
+.threat-val-high { color: var(--accent-red); }
+
+.detail-counters {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.detail-engage-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.detail-engage-tag {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    padding: 2px 8px;
+    border: 1px solid;
+    border-radius: 2px;
+}
+
+/* ---- Form Hints ---- */
+.form-hint {
+    font-size: 10px;
+    color: var(--text-dim);
+    padding: 8px 10px;
+    background: rgba(0, 230, 118, 0.03);
+    border: 1px solid rgba(0, 230, 118, 0.08);
+    border-radius: 3px;
+    line-height: 1.5;
+}
+
+.form-range-hint {
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-top: 1px;
+}
+
 /* ---- Responsive ---- */
 @media (max-width: 1200px) {
     .dashboard {
@@ -778,10 +883,54 @@ body {
 }
 
 @media (max-width: 900px) {
+    body {
+        overflow-y: auto;
+        height: auto;
+    }
+
+    #app {
+        height: auto;
+        min-height: 100vh;
+    }
+
     .dashboard {
         grid-template-columns: 1fr;
         grid-template-rows: auto;
     }
-    .log-panel { grid-column: 1; }
-    .engagements-panel { grid-column: 1; }
+
+    .radar-panel {
+        min-height: 60vh;
+    }
+
+    .radar-container {
+        min-height: 50vh;
+    }
+
+    .defense-panel,
+    .missile-panel {
+        max-height: 40vh;
+    }
+
+    .log-panel {
+        grid-column: 1;
+        max-height: 30vh;
+    }
+
+    .engagements-panel {
+        grid-column: 1;
+        max-height: 30vh;
+    }
+
+    .modal {
+        width: 92vw;
+        max-width: 440px;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .detail-grid {
+        grid-template-columns: 1fr 1fr;
+    }
 }

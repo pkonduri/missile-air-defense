@@ -3,7 +3,7 @@
 // Canvas-based radar display with sweep, tracks
 // ============================================
 
-class Radar {
+export default class Radar {
     constructor(canvas) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
@@ -35,7 +35,6 @@ class Radar {
     drawGrid() {
         const { ctx, center, radius } = this;
 
-        // Range rings
         const rings = 4;
         for (let i = 1; i <= rings; i++) {
             const r = (radius / rings) * i;
@@ -48,7 +47,6 @@ class Radar {
             ctx.stroke();
         }
 
-        // Crosshairs
         ctx.strokeStyle = 'rgba(0, 230, 118, 0.08)';
         ctx.lineWidth = 1;
         for (let angle = 0; angle < Math.PI; angle += Math.PI / 6) {
@@ -64,7 +62,6 @@ class Radar {
             ctx.stroke();
         }
 
-        // Range labels
         ctx.font = '9px SF Mono, Consolas, monospace';
         ctx.fillStyle = 'rgba(0, 230, 118, 0.3)';
         ctx.textAlign = 'left';
@@ -74,7 +71,6 @@ class Radar {
             ctx.fillText(`${rangeKm}km`, center.x + 4, center.y - r + 12);
         }
 
-        // Cardinal labels
         ctx.fillStyle = 'rgba(0, 230, 118, 0.25)';
         ctx.font = '10px SF Mono, Consolas, monospace';
         ctx.textAlign = 'center';
@@ -88,11 +84,6 @@ class Radar {
 
     drawSweep() {
         const { ctx, center, radius, sweepAngle } = this;
-
-        // Sweep cone
-        const gradient = ctx.createConicalGradient
-            ? null
-            : ctx.createRadialGradient(center.x, center.y, 0, center.x, center.y, radius);
 
         ctx.save();
         ctx.beginPath();
@@ -112,7 +103,6 @@ class Radar {
         ctx.fill();
         ctx.restore();
 
-        // Sweep line
         ctx.beginPath();
         ctx.moveTo(center.x, center.y);
         ctx.lineTo(
@@ -130,11 +120,9 @@ class Radar {
         for (const track of this.tracks) {
             if (track.destroyed) continue;
 
-            // Convert track position (normalized -1..1) to canvas coords
             const x = center.x + track.x * radius;
             const y = center.y + track.y * radius;
 
-            // Trail
             if (track.trail.length > 1) {
                 ctx.beginPath();
                 ctx.moveTo(
@@ -152,20 +140,17 @@ class Radar {
                 ctx.stroke();
             }
 
-            // Blip
             const blipSize = 3 + Math.sin(timestamp * 0.005) * 1;
             ctx.beginPath();
             ctx.arc(x, y, blipSize, 0, Math.PI * 2);
             ctx.fillStyle = track.color;
             ctx.fill();
 
-            // Glow
             ctx.beginPath();
             ctx.arc(x, y, blipSize + 4, 0, Math.PI * 2);
             ctx.fillStyle = track.color + '20';
             ctx.fill();
 
-            // Label
             ctx.font = '9px SF Mono, Consolas, monospace';
             ctx.fillStyle = track.color + 'CC';
             ctx.textAlign = 'left';
@@ -173,7 +158,6 @@ class Radar {
             ctx.fillStyle = track.color + '80';
             ctx.fillText(track.info, x + 8, y + 6);
 
-            // Velocity vector
             ctx.beginPath();
             ctx.moveTo(x, y);
             ctx.lineTo(x + track.vx * radius * 8, y + track.vy * radius * 8);
@@ -183,20 +167,18 @@ class Radar {
         }
     }
 
-    drawInterceptors(timestamp) {
+    drawInterceptors() {
         const { ctx, center, radius } = this;
 
         for (const int of this.interceptors) {
             const x = center.x + int.x * radius;
             const y = center.y + int.y * radius;
 
-            // Interceptor dot
             ctx.beginPath();
             ctx.arc(x, y, 2, 0, Math.PI * 2);
             ctx.fillStyle = '#29b6f6';
             ctx.fill();
 
-            // Trail
             if (int.trail.length > 1) {
                 ctx.beginPath();
                 ctx.moveTo(
@@ -235,7 +217,6 @@ class Radar {
                 : `rgba(255, 82, 82, ${0.5 * (1 - progress)})`;
             ctx.fill();
 
-            // Flash
             if (age < 150) {
                 ctx.beginPath();
                 ctx.arc(x, y, expRadius * 0.5, 0, Math.PI * 2);
@@ -250,7 +231,6 @@ class Radar {
     drawDefenseOrigin() {
         const { ctx, center } = this;
 
-        // Defense hub marker
         ctx.beginPath();
         ctx.arc(center.x, center.y, 6, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(0, 230, 118, 0.5)';
@@ -263,28 +243,24 @@ class Radar {
         ctx.fill();
     }
 
-    // -- Main render loop --
+    // -- Main render --
 
     render(timestamp) {
         const { ctx, canvas } = this;
         const width = canvas.width / (window.devicePixelRatio || 1);
         const height = canvas.height / (window.devicePixelRatio || 1);
 
-        // Clear
         ctx.clearRect(0, 0, width, height);
-
-        // Background
         ctx.fillStyle = '#0a0e14';
         ctx.fillRect(0, 0, width, height);
 
         this.drawGrid();
         this.drawSweep();
         this.drawTracks(timestamp);
-        this.drawInterceptors(timestamp);
+        this.drawInterceptors();
         this.drawExplosions(timestamp);
         this.drawDefenseOrigin();
 
-        // Advance sweep
         this.sweepAngle += 0.012;
         if (this.sweepAngle > Math.PI * 2) {
             this.sweepAngle -= Math.PI * 2;

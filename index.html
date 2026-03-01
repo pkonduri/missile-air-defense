@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AEGIS — Air Defense Command</title>
-    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div id="app">
@@ -32,6 +31,7 @@
                 <div class="panel-header">
                     <span class="panel-icon">⛨</span>
                     <h2>DEFENSE SYSTEMS</h2>
+                    <button class="btn-add" id="btnAddDefense" title="Add custom defense system">+</button>
                     <span class="panel-status online">ONLINE</span>
                 </div>
                 <div class="panel-body" id="defenseSystems"></div>
@@ -62,12 +62,13 @@
                 <div class="panel-header">
                     <span class="panel-icon">▲</span>
                     <h2>THREAT CATALOG</h2>
+                    <button class="btn-add" id="btnAddThreat" title="Add custom threat">+</button>
                     <span class="panel-status online">LOADED</span>
                 </div>
                 <div class="panel-body" id="missileCatalog"></div>
             </section>
 
-            <!-- Bottom Panel: Event Log & Engagement Timeline -->
+            <!-- Bottom Panel: Event Log -->
             <section class="panel log-panel">
                 <div class="panel-header">
                     <span class="panel-icon">▤</span>
@@ -91,9 +92,6 @@
         </main>
     </div>
 
-    <script src="data.js"></script>
-    <script src="radar.js"></script>
-    <script src="simulation.js"></script>
-    <script src="app.js"></script>
+    <script type="module" src="/src/main.js"></script>
 </body>
 </html>

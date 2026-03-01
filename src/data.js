@@ -3,36 +3,36 @@
 // Missile types, defense systems, specifications
 // ============================================
 
-const MISSILE_TYPES = Object.freeze({
+export const MISSILE_TYPES = Object.freeze({
     BALLISTIC: 'ballistic',
     CRUISE: 'cruise',
     HYPERSONIC: 'hypersonic',
     DRONE: 'drone',
 });
 
-const THREAT_LEVELS = Object.freeze({
+export const THREAT_LEVELS = Object.freeze({
     LOW: 'low',
     MEDIUM: 'medium',
     HIGH: 'high',
 });
 
-const DEFENSE_STATUS = Object.freeze({
+export const DEFENSE_STATUS = Object.freeze({
     READY: 'ready',
     ENGAGING: 'engaging',
     RELOADING: 'reloading',
 });
 
-// -- Threat Catalog --
-const THREATS = [
+// -- Threat Catalog (mutable array so custom threats can be added) --
+export const THREATS = [
     {
         id: 'scud-b',
         name: 'SCUD-B',
         type: MISSILE_TYPES.BALLISTIC,
         threat: THREAT_LEVELS.MEDIUM,
-        speed: 1500,          // m/s
-        maxRange: 300,         // km
-        altitude: 80,          // km (apogee)
-        rcs: 1.2,              // m² radar cross section
+        speed: 1500,
+        maxRange: 300,
+        altitude: 80,
+        rcs: 1.2,
         description: 'Short-range tactical ballistic missile',
     },
     {
@@ -114,18 +114,18 @@ const THREATS = [
     },
 ];
 
-// -- Defense Systems --
-const DEFENSE_SYSTEMS = [
+// -- Defense Systems (mutable array so custom systems can be added) --
+export const DEFENSE_SYSTEMS = [
     {
         id: 'patriot',
         name: 'PATRIOT PAC-3',
         type: 'Surface-to-Air',
-        range: 160,            // km
-        maxAlt: 25,            // km
-        interceptSpeed: 1700,  // m/s
+        range: 160,
+        maxAlt: 25,
+        interceptSpeed: 1700,
         roundsTotal: 16,
         roundsRemaining: 16,
-        pkill: 0.85,           // probability of kill
+        pkill: 0.85,
         canEngage: [MISSILE_TYPES.BALLISTIC, MISSILE_TYPES.CRUISE],
         status: DEFENSE_STATUS.READY,
     },

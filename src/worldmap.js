@@ -18,6 +18,9 @@ export default class WorldMap {
         this.explosions = [];
         this.sweepX = 0;
 
+        // Theme (night or day)
+        this._theme = 'night';
+
         // Map data
         this._land = null;
         this._borders = null;
@@ -66,6 +69,14 @@ export default class WorldMap {
         this.projection.setViewport(w, h);
     }
 
+    setTheme(theme) {
+        this._theme = theme;
+    }
+
+    get _isDay() {
+        return this._theme === 'day';
+    }
+
     // -- Drawing methods --
 
     drawMap() {
@@ -78,20 +89,20 @@ export default class WorldMap {
         // Land fill
         ctx.beginPath();
         path(this._land);
-        ctx.fillStyle = 'rgba(15, 35, 28, 0.9)';
+        ctx.fillStyle = this._isDay ? 'rgba(220, 230, 215, 0.95)' : 'rgba(15, 35, 28, 0.9)';
         ctx.fill();
 
         // Coastlines
         ctx.beginPath();
         path(this._land);
-        ctx.strokeStyle = 'rgba(0, 230, 118, 0.18)';
+        ctx.strokeStyle = this._isDay ? 'rgba(0, 130, 70, 0.3)' : 'rgba(0, 230, 118, 0.18)';
         ctx.lineWidth = 0.8;
         ctx.stroke();
 
         // Country borders
         ctx.beginPath();
         path(this._borders);
-        ctx.strokeStyle = 'rgba(0, 230, 118, 0.07)';
+        ctx.strokeStyle = this._isDay ? 'rgba(0, 130, 70, 0.15)' : 'rgba(0, 230, 118, 0.07)';
         ctx.lineWidth = 0.4;
         ctx.stroke();
     }
@@ -103,13 +114,13 @@ export default class WorldMap {
 
         ctx.beginPath();
         path(this._graticule);
-        ctx.strokeStyle = 'rgba(0, 230, 118, 0.035)';
+        ctx.strokeStyle = this._isDay ? 'rgba(0, 100, 60, 0.08)' : 'rgba(0, 230, 118, 0.035)';
         ctx.lineWidth = 0.5;
         ctx.stroke();
 
         // Axis labels
         ctx.font = '8px SF Mono, Consolas, monospace';
-        ctx.fillStyle = 'rgba(0, 230, 118, 0.18)';
+        ctx.fillStyle = this._isDay ? 'rgba(0, 100, 60, 0.3)' : 'rgba(0, 230, 118, 0.18)';
 
         // Longitude labels along bottom
         ctx.textAlign = 'center';
@@ -136,12 +147,12 @@ export default class WorldMap {
             // Range ring
             ctx.beginPath();
             ctx.arc(x, y, 14, 0, Math.PI * 2);
-            ctx.strokeStyle = 'rgba(0, 230, 118, 0.1)';
+            ctx.strokeStyle = this._isDay ? 'rgba(0, 130, 70, 0.2)' : 'rgba(0, 230, 118, 0.1)';
             ctx.lineWidth = 0.5;
             ctx.stroke();
 
             // Bracket marker
-            ctx.strokeStyle = 'rgba(0, 230, 118, 0.6)';
+            ctx.strokeStyle = this._isDay ? 'rgba(0, 130, 70, 0.7)' : 'rgba(0, 230, 118, 0.6)';
             ctx.lineWidth = 1.2;
             ctx.beginPath();
             ctx.moveTo(x - r, y - r + 2); ctx.lineTo(x - r, y - r); ctx.lineTo(x - r + 2, y - r);
@@ -153,15 +164,15 @@ export default class WorldMap {
             // Center dot
             ctx.beginPath();
             ctx.arc(x, y, 1.5, 0, Math.PI * 2);
-            ctx.fillStyle = '#00e676';
+            ctx.fillStyle = this._isDay ? '#00a85a' : '#00e676';
             ctx.fill();
 
             // Labels
             ctx.font = '8px SF Mono, Consolas, monospace';
-            ctx.fillStyle = 'rgba(0, 230, 118, 0.5)';
+            ctx.fillStyle = this._isDay ? 'rgba(0, 100, 60, 0.7)' : 'rgba(0, 230, 118, 0.5)';
             ctx.textAlign = 'left';
             ctx.fillText(site.label, x + r + 5, y - 2);
-            ctx.fillStyle = 'rgba(0, 230, 118, 0.25)';
+            ctx.fillStyle = this._isDay ? 'rgba(0, 100, 60, 0.45)' : 'rgba(0, 230, 118, 0.25)';
             ctx.fillText(site.name, x + r + 5, y + 8);
         }
     }
@@ -178,11 +189,11 @@ export default class WorldMap {
             // Dot
             ctx.beginPath();
             ctx.arc(x, y, 1.2, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(200, 214, 229, 0.25)';
+            ctx.fillStyle = this._isDay ? 'rgba(30, 45, 60, 0.4)' : 'rgba(200, 214, 229, 0.25)';
             ctx.fill();
 
             // Name
-            ctx.fillStyle = 'rgba(200, 214, 229, 0.2)';
+            ctx.fillStyle = this._isDay ? 'rgba(30, 45, 60, 0.35)' : 'rgba(200, 214, 229, 0.2)';
             ctx.fillText(city.name, x, y - 5);
         }
     }
@@ -192,15 +203,15 @@ export default class WorldMap {
 
         // Horizontal scanline
         const grad = ctx.createLinearGradient(this.sweepX - 60, 0, this.sweepX, 0);
-        grad.addColorStop(0, 'rgba(0, 230, 118, 0)');
-        grad.addColorStop(1, 'rgba(0, 230, 118, 0.035)');
+        grad.addColorStop(0, this._isDay ? 'rgba(0, 130, 70, 0)' : 'rgba(0, 230, 118, 0)');
+        grad.addColorStop(1, this._isDay ? 'rgba(0, 130, 70, 0.06)' : 'rgba(0, 230, 118, 0.035)');
         ctx.fillStyle = grad;
         ctx.fillRect(this.sweepX - 60, 0, 60, _height);
 
         ctx.beginPath();
         ctx.moveTo(this.sweepX, 0);
         ctx.lineTo(this.sweepX, _height);
-        ctx.strokeStyle = 'rgba(0, 230, 118, 0.15)';
+        ctx.strokeStyle = this._isDay ? 'rgba(0, 130, 70, 0.2)' : 'rgba(0, 230, 118, 0.15)';
         ctx.lineWidth = 1;
         ctx.stroke();
 
@@ -346,7 +357,7 @@ export default class WorldMap {
         ctx.clearRect(0, 0, _width, _height);
 
         // Ocean
-        ctx.fillStyle = '#080d12';
+        ctx.fillStyle = this._isDay ? '#c8d6e5' : '#080d12';
         ctx.fillRect(0, 0, _width, _height);
 
         this.drawGraticule();

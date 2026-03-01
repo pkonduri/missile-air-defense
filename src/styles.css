@@ -27,6 +27,29 @@
     --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
+/* Day Mode Overrides */
+[data-theme="day"] {
+    --bg-primary: #e8ecf1;
+    --bg-secondary: #f0f3f7;
+    --bg-panel: #f5f7fa;
+    --bg-panel-header: #dfe4ea;
+    --border: #c8d0da;
+    --border-active: #8fa4bd;
+    --text-primary: #1a2332;
+    --text-secondary: #556677;
+    --text-dim: #8899aa;
+    --accent-green: #00a85a;
+    --accent-blue: #1a8fd4;
+    --accent-red: #d93636;
+    --accent-orange: #d48a00;
+    --accent-cyan: #00a0b8;
+    --radar-green: #00a85a;
+    --radar-sweep: rgba(0, 168, 90, 0.08);
+    --glow-green: 0 0 12px rgba(0, 168, 90, 0.25);
+    --glow-red: 0 0 12px rgba(217, 54, 54, 0.25);
+    --glow-blue: 0 0 12px rgba(26, 143, 212, 0.25);
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -54,15 +77,18 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 0 20px;
-    height: 48px;
+    min-height: 48px;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
 }
 
 .top-bar-left {
     display: flex;
     align-items: center;
     gap: 12px;
+    min-width: 0;
+    flex-shrink: 1;
 }
 
 .logo {
@@ -118,6 +144,36 @@ body {
 .clock {
     color: var(--text-primary);
     letter-spacing: 1px;
+}
+
+.top-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+/* Theme Toggle */
+.theme-toggle {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, border-color 0.2s;
+    flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+    border-color: var(--border-active);
+    background: var(--bg-panel-header);
 }
 
 .threat-level {
@@ -891,6 +947,27 @@ body {
     #app {
         height: auto;
         min-height: 100vh;
+    }
+
+    .top-bar {
+        padding: 0 10px;
+        gap: 8px;
+    }
+
+    .subtitle {
+        display: none;
+    }
+
+    .top-bar-center {
+        display: none;
+    }
+
+    .top-bar-right {
+        gap: 8px;
+    }
+
+    .threat-level {
+        font-size: 10px;
     }
 
     .dashboard {

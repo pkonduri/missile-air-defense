@@ -77,15 +77,18 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 0 20px;
-    height: 48px;
+    min-height: 48px;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
 }
 
 .top-bar-left {
     display: flex;
     align-items: center;
     gap: 12px;
+    min-width: 0;
+    flex-shrink: 1;
 }
 
 .logo {
@@ -147,6 +150,7 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-shrink: 0;
 }
 
 /* Theme Toggle */
@@ -943,6 +947,27 @@ body {
     #app {
         height: auto;
         min-height: 100vh;
+    }
+
+    .top-bar {
+        padding: 0 10px;
+        gap: 8px;
+    }
+
+    .subtitle {
+        display: none;
+    }
+
+    .top-bar-center {
+        display: none;
+    }
+
+    .top-bar-right {
+        gap: 8px;
+    }
+
+    .threat-level {
+        font-size: 10px;
     }
 
     .dashboard {

@@ -1,9 +1,11 @@
 // ============================================
 // AEGIS — World Map Renderer
-// Canvas-based map with threat tracks, defense sites
+// D3-geo powered canvas map with threat overlays
 // ============================================
 
-import { WORLD_POLYGONS, DEFENSE_LOCATIONS, TARGET_CITIES } from './geodata.js';
+import { geoGraticule } from 'd3-geo';
+import * as topojson from 'topojson-client';
+import { DEFENSE_LOCATIONS, TARGET_CITIES } from './geodata.js';
 import Projection from './projection.js';
 
 export default class WorldMap {
@@ -16,11 +18,30 @@ export default class WorldMap {
         this.explosions = [];
         this.sweepX = 0;
 
-        // Cached Path2D objects for land polygons
-        this._mapPaths = null;
+        // Map data
+        this._land = null;
+        this._borders = null;
+        this._graticule = geoGraticule().step([15, 15])();
+        this._loaded = false;
+
+        this._width = 0;
+        this._height = 0;
 
         this.resize();
         window.addEventListener('resize', () => this.resize());
+        this._loadMapData();
+    }
+
+    async _loadMapData() {
+        try {
+            const res = await fetch('/world-110m.json');
+            const topology = await res.json();
+            this._land = topojson.feature(topology, topology.objects.land);
+            this._borders = topojson.mesh(topology, topology.objects.countries, (a, b) => a !== b);
+            this._loaded = true;
+        } catch (e) {
+            console.error('Failed to load map data:', e);
+        }
     }
 
     resize() {
@@ -35,79 +56,65 @@ export default class WorldMap {
         this._width = rect.width;
         this._height = rect.height;
         this.projection.setViewport(rect.width, rect.height);
-        this._buildMapPaths();
-    }
-
-    // -- Pre-build Path2D cache for performance --
-
-    _buildMapPaths() {
-        this._mapPaths = WORLD_POLYGONS.map(ring => {
-            const path = new Path2D();
-            if (ring.length === 0) return path;
-            const first = this.projection.project(ring[0][1], ring[0][0]);
-            path.moveTo(first.x, first.y);
-            for (let i = 1; i < ring.length; i++) {
-                const p = this.projection.project(ring[i][1], ring[i][0]);
-                path.lineTo(p.x, p.y);
-            }
-            path.closePath();
-            return path;
-        });
     }
 
     // -- Drawing methods --
 
     drawMap() {
-        const { ctx } = this;
+        if (!this._loaded) return;
 
-        // Land masses
-        for (const path of this._mapPaths) {
-            ctx.fillStyle = 'rgba(18, 38, 32, 0.85)';
-            ctx.fill(path);
-            ctx.strokeStyle = 'rgba(0, 230, 118, 0.12)';
-            ctx.lineWidth = 0.8;
-            ctx.stroke(path);
-        }
+        const { ctx } = this;
+        const path = this.projection.pathGenerator;
+        path.context(ctx);
+
+        // Land fill
+        ctx.beginPath();
+        path(this._land);
+        ctx.fillStyle = 'rgba(15, 35, 28, 0.9)';
+        ctx.fill();
+
+        // Coastlines
+        ctx.beginPath();
+        path(this._land);
+        ctx.strokeStyle = 'rgba(0, 230, 118, 0.18)';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+
+        // Country borders
+        ctx.beginPath();
+        path(this._borders);
+        ctx.strokeStyle = 'rgba(0, 230, 118, 0.07)';
+        ctx.lineWidth = 0.4;
+        ctx.stroke();
     }
 
     drawGraticule() {
-        const { ctx, projection, _width, _height } = this;
+        const { ctx } = this;
+        const path = this.projection.pathGenerator;
+        path.context(ctx);
 
-        ctx.strokeStyle = 'rgba(0, 230, 118, 0.04)';
+        ctx.beginPath();
+        path(this._graticule);
+        ctx.strokeStyle = 'rgba(0, 230, 118, 0.035)';
         ctx.lineWidth = 0.5;
+        ctx.stroke();
 
-        // Longitude lines every 30°
-        for (let lon = -30; lon <= 150; lon += 30) {
-            const top = projection.project(projection.latMax, lon);
-            const bot = projection.project(projection.latMin, lon);
-            ctx.beginPath();
-            ctx.moveTo(top.x, top.y);
-            ctx.lineTo(bot.x, bot.y);
-            ctx.stroke();
-        }
-
-        // Latitude lines every 15°
-        for (let lat = -15; lat <= 75; lat += 15) {
-            const left = projection.project(lat, projection.lonMin);
-            const right = projection.project(lat, projection.lonMax);
-            ctx.beginPath();
-            ctx.moveTo(left.x, left.y);
-            ctx.lineTo(right.x, right.y);
-            ctx.stroke();
-        }
-
-        // Labels
+        // Axis labels
         ctx.font = '8px SF Mono, Consolas, monospace';
         ctx.fillStyle = 'rgba(0, 230, 118, 0.18)';
+
+        // Longitude labels along bottom
         ctx.textAlign = 'center';
         for (let lon = 0; lon <= 150; lon += 30) {
-            const p = projection.project(projection.latMin, lon);
-            ctx.fillText(`${lon}°E`, p.x, p.y + 10);
+            const { x, y } = this.projection.project(-10, lon);
+            ctx.fillText(`${lon}°E`, x, y + 12);
         }
+
+        // Latitude labels along left
         ctx.textAlign = 'right';
         for (let lat = 0; lat <= 60; lat += 15) {
-            const p = projection.project(lat, projection.lonMin);
-            ctx.fillText(`${lat}°N`, p.x - 4, p.y + 3);
+            const { x, y } = this.projection.project(lat, -22);
+            ctx.fillText(`${lat}°N`, x - 4, y + 3);
         }
     }
 
@@ -118,10 +125,10 @@ export default class WorldMap {
             const { x, y } = projection.project(site.lat, site.lon);
             const r = 5;
 
-            // Range ring (subtle)
+            // Range ring
             ctx.beginPath();
-            ctx.arc(x, y, 12, 0, Math.PI * 2);
-            ctx.strokeStyle = 'rgba(0, 230, 118, 0.12)';
+            ctx.arc(x, y, 14, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(0, 230, 118, 0.1)';
             ctx.lineWidth = 0.5;
             ctx.stroke();
 
@@ -129,13 +136,9 @@ export default class WorldMap {
             ctx.strokeStyle = 'rgba(0, 230, 118, 0.6)';
             ctx.lineWidth = 1.2;
             ctx.beginPath();
-            // Top-left corner
             ctx.moveTo(x - r, y - r + 2); ctx.lineTo(x - r, y - r); ctx.lineTo(x - r + 2, y - r);
-            // Top-right corner
             ctx.moveTo(x + r - 2, y - r); ctx.lineTo(x + r, y - r); ctx.lineTo(x + r, y - r + 2);
-            // Bottom-right corner
             ctx.moveTo(x + r, y + r - 2); ctx.lineTo(x + r, y + r); ctx.lineTo(x + r - 2, y + r);
-            // Bottom-left corner
             ctx.moveTo(x - r + 2, y + r); ctx.lineTo(x - r, y + r); ctx.lineTo(x - r, y + r - 2);
             ctx.stroke();
 
@@ -145,32 +148,33 @@ export default class WorldMap {
             ctx.fillStyle = '#00e676';
             ctx.fill();
 
-            // Label
+            // Labels
             ctx.font = '8px SF Mono, Consolas, monospace';
-            ctx.fillStyle = 'rgba(0, 230, 118, 0.45)';
+            ctx.fillStyle = 'rgba(0, 230, 118, 0.5)';
             ctx.textAlign = 'left';
-            ctx.fillText(site.label, x + r + 4, y - 2);
+            ctx.fillText(site.label, x + r + 5, y - 2);
             ctx.fillStyle = 'rgba(0, 230, 118, 0.25)';
-            ctx.fillText(site.name, x + r + 4, y + 7);
+            ctx.fillText(site.name, x + r + 5, y + 8);
         }
     }
 
     drawCityMarkers() {
         const { ctx, projection } = this;
 
-        ctx.fillStyle = 'rgba(200, 214, 229, 0.2)';
         ctx.font = '7px SF Mono, Consolas, monospace';
         ctx.textAlign = 'center';
 
         for (const city of TARGET_CITIES) {
             const { x, y } = projection.project(city.lat, city.lon);
 
-            // Small dot
+            // Dot
             ctx.beginPath();
             ctx.arc(x, y, 1.2, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(200, 214, 229, 0.25)';
             ctx.fill();
 
-            // Label
+            // Name
+            ctx.fillStyle = 'rgba(200, 214, 229, 0.2)';
             ctx.fillText(city.name, x, y - 5);
         }
     }
@@ -178,25 +182,22 @@ export default class WorldMap {
     drawSweep() {
         const { ctx, _width, _height } = this;
 
-        // Horizontal scanline moving left to right
-        const grad = ctx.createLinearGradient(this.sweepX - 50, 0, this.sweepX, 0);
+        // Horizontal scanline
+        const grad = ctx.createLinearGradient(this.sweepX - 60, 0, this.sweepX, 0);
         grad.addColorStop(0, 'rgba(0, 230, 118, 0)');
-        grad.addColorStop(1, 'rgba(0, 230, 118, 0.04)');
+        grad.addColorStop(1, 'rgba(0, 230, 118, 0.035)');
         ctx.fillStyle = grad;
-        ctx.fillRect(this.sweepX - 50, 0, 50, _height);
+        ctx.fillRect(this.sweepX - 60, 0, 60, _height);
 
         ctx.beginPath();
         ctx.moveTo(this.sweepX, 0);
         ctx.lineTo(this.sweepX, _height);
-        ctx.strokeStyle = 'rgba(0, 230, 118, 0.2)';
+        ctx.strokeStyle = 'rgba(0, 230, 118, 0.15)';
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // Advance
-        this.sweepX += 1.5;
-        if (this.sweepX > _width) {
-            this.sweepX = 0;
-        }
+        this.sweepX += 1.2;
+        if (this.sweepX > _width) this.sweepX = 0;
     }
 
     drawTracks(timestamp) {
@@ -221,6 +222,17 @@ export default class WorldMap {
                 ctx.stroke();
             }
 
+            // Target line (faint dashed line to destination)
+            const target = projection.project(track.targetLat, track.targetLon);
+            ctx.beginPath();
+            ctx.setLineDash([3, 6]);
+            ctx.moveTo(x, y);
+            ctx.lineTo(target.x, target.y);
+            ctx.strokeStyle = track.color + '18';
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
+            ctx.setLineDash([]);
+
             // Blip
             const blipSize = 3 + Math.sin(timestamp * 0.005) * 1;
             ctx.beginPath();
@@ -230,8 +242,8 @@ export default class WorldMap {
 
             // Glow
             ctx.beginPath();
-            ctx.arc(x, y, blipSize + 5, 0, Math.PI * 2);
-            ctx.fillStyle = track.color + '15';
+            ctx.arc(x, y, blipSize + 6, 0, Math.PI * 2);
+            ctx.fillStyle = track.color + '12';
             ctx.fill();
 
             // Velocity vector
@@ -252,7 +264,7 @@ export default class WorldMap {
             ctx.textAlign = 'left';
             ctx.fillText(track.label, x + 10, y - 5);
             ctx.fillStyle = track.color + '88';
-            ctx.fillText(track.info, x + 10, y + 5);
+            ctx.fillText(track.info, x + 10, y + 6);
         }
     }
 
@@ -262,9 +274,8 @@ export default class WorldMap {
         for (const int of this.interceptors) {
             const { x, y } = projection.project(int.lat, int.lon);
 
-            // Interceptor dot
             ctx.beginPath();
-            ctx.arc(x, y, 2, 0, Math.PI * 2);
+            ctx.arc(x, y, 2.5, 0, Math.PI * 2);
             ctx.fillStyle = '#29b6f6';
             ctx.fill();
 
@@ -289,19 +300,21 @@ export default class WorldMap {
 
         this.explosions = this.explosions.filter(exp => {
             const age = timestamp - exp.startTime;
-            if (age > 1000) return false;
+            if (age > 1200) return false;
 
             const { x, y } = projection.project(exp.lat, exp.lon);
-            const progress = age / 1000;
-            const r = 5 + progress * 20;
+            const progress = age / 1200;
+            const r = 5 + progress * 24;
 
+            // Outer ring
             ctx.beginPath();
             ctx.arc(x, y, r, 0, Math.PI * 2);
             ctx.fillStyle = exp.success
-                ? `rgba(0, 230, 118, ${0.5 * (1 - progress)})`
-                : `rgba(255, 82, 82, ${0.5 * (1 - progress)})`;
+                ? `rgba(0, 230, 118, ${0.4 * (1 - progress)})`
+                : `rgba(255, 82, 82, ${0.4 * (1 - progress)})`;
             ctx.fill();
 
+            // Flash
             if (age < 200) {
                 ctx.beginPath();
                 ctx.arc(x, y, r * 0.4, 0, Math.PI * 2);
@@ -320,21 +333,21 @@ export default class WorldMap {
 
         ctx.clearRect(0, 0, _width, _height);
 
-        // Ocean background
-        ctx.fillStyle = '#0a0e14';
+        // Ocean
+        ctx.fillStyle = '#080d12';
         ctx.fillRect(0, 0, _width, _height);
 
-        this.drawMap();
         this.drawGraticule();
+        this.drawMap();
         this.drawSweep();
-        this.drawDefenseSites();
         this.drawCityMarkers();
+        this.drawDefenseSites();
         this.drawTracks(timestamp);
         this.drawInterceptors();
         this.drawExplosions(timestamp);
     }
 
-    // -- Track management (same API as Radar) --
+    // -- Track management (same API as before) --
 
     addTrack(track) {
         this.tracks.push(track);

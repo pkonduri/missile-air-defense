@@ -27,8 +27,7 @@ export default class WorldMap {
         this._width = 0;
         this._height = 0;
 
-        this.resize();
-        window.addEventListener('resize', () => this.resize());
+        window.addEventListener('resize', () => this._applyResize());
         this._loadMapData();
     }
 
@@ -44,18 +43,27 @@ export default class WorldMap {
         }
     }
 
-    resize() {
+    _applyResize() {
         const rect = this.canvas.parentElement.getBoundingClientRect();
+        const w = Math.round(rect.width);
+        const h = Math.round(rect.height);
+
+        // Skip if container has no size yet (layout not ready)
+        if (w < 10 || h < 10) return;
+
+        // Skip if dimensions unchanged
+        if (w === this._width && h === this._height) return;
+
         const dpr = window.devicePixelRatio || 1;
-        this.canvas.width = rect.width * dpr;
-        this.canvas.height = rect.height * dpr;
-        this.canvas.style.width = `${rect.width}px`;
-        this.canvas.style.height = `${rect.height}px`;
+        this.canvas.width = w * dpr;
+        this.canvas.height = h * dpr;
+        this.canvas.style.width = `${w}px`;
+        this.canvas.style.height = `${h}px`;
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-        this._width = rect.width;
-        this._height = rect.height;
-        this.projection.setViewport(rect.width, rect.height);
+        this._width = w;
+        this._height = h;
+        this.projection.setViewport(w, h);
     }
 
     // -- Drawing methods --
@@ -329,7 +337,11 @@ export default class WorldMap {
     // -- Main render --
 
     render(timestamp) {
+        // Re-check size every frame to catch late layout
+        this._applyResize();
+
         const { ctx, _width, _height } = this;
+        if (_width < 10 || _height < 10) return;
 
         ctx.clearRect(0, 0, _width, _height);
 
